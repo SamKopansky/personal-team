@@ -1,3 +1,4 @@
+import json
 import os
 import time
 import uuid
@@ -72,7 +73,14 @@ def _get_recent_meal_plans(weeks: int = 4) -> list[str]:
             "AND triggered_at > ? ORDER BY triggered_at DESC",
             (since,),
         ).fetchall()
-        return [r["output"] for r in rows if r["output"]]
+        result = []
+        for r in rows:
+            if r["output"]:
+                try:
+                    result.append(json.loads(r["output"]))
+                except (json.JSONDecodeError, TypeError):
+                    result.append(r["output"])
+        return result
     finally:
         conn.close()
 
@@ -212,9 +220,15 @@ def run(message: str, chat_id: str) -> str:
 
     has_positive, has_negative = detect_signals(message)
     if has_positive:
-        _save_recipe_signal(message, "positive")
+        try:
+            _save_recipe_signal(message, "positive")
+        except Exception:
+            pass  # signal detection is best-effort
     if has_negative:
-        _save_recipe_signal(message, "negative")
+        try:
+            _save_recipe_signal(message, "negative")
+        except Exception:
+            pass  # signal detection is best-effort
 
     return response
 
@@ -260,12 +274,14 @@ def _allowed(update: "Any") -> bool:
 
 
 async def _handle_meal(update: "Any", context: "Any"):
-    from telegram.ext import ContextTypes  # noqa: F401
     if not _allowed(update):
         return
+    import asyncio
     msg = await update.message.reply_text("🟦 PA · Working on your meal plan…")
     try:
-        meal_plan_job()
+        loop = asyncio.get_event_loop()
+        await loop.run_in_executor(None, meal_plan_job)
+        await msg.edit_text("🟦 PA · Meal plan sent! Check the next message.")
     except Exception as e:
         await msg.edit_text(f"🟦 PA · Meal plan failed: {e}")
 
