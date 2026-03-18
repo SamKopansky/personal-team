@@ -3,7 +3,7 @@ import asyncio
 import logging
 from dotenv import load_dotenv
 
-load_dotenv("/home/pi/.env")
+load_dotenv()
 
 from apscheduler.schedulers.blocking import BlockingScheduler
 import telegram

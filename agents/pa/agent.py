@@ -289,14 +289,17 @@ async def _handle_meal(update: "Any", context: "Any"):
 async def _handle_research(update: "Any", context: "Any"):
     if not _allowed(update):
         return
-    topic = " ".join(context.args) if context.args else ""
+    import asyncio
+    args = context.args if hasattr(context, 'args') else []
+    topic = " ".join(args) if args else ""
     if not topic:
         await update.message.reply_text(
             "🟦 PA · Please provide a topic: /research [topic]"
         )
         return
     chat_id = str(update.effective_chat.id)
-    response = run(f"[RESEARCH REQUEST] {topic}", chat_id)
+    loop = asyncio.get_event_loop()
+    response = await loop.run_in_executor(None, run, f"[RESEARCH REQUEST] {topic}", chat_id)
     await update.message.reply_text(f"🟦 PA · {response}")
 
 
@@ -311,8 +314,10 @@ async def _handle_clear(update: "Any", context: "Any"):
 async def _handle_message(update: "Any", context: "Any"):
     if not _allowed(update):
         return
+    import asyncio
     chat_id = str(update.effective_chat.id)
-    response = run(update.message.text, chat_id)
+    loop = asyncio.get_event_loop()
+    response = await loop.run_in_executor(None, run, update.message.text, chat_id)
     await update.message.reply_text(f"🟦 PA · {response}")
 
 

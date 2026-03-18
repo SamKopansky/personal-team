@@ -2,7 +2,7 @@ import os
 import logging
 from dotenv import load_dotenv
 
-load_dotenv("/home/pi/.env")
+load_dotenv()
 
 from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes
@@ -24,7 +24,11 @@ def _allowed(update: Update) -> bool:
 async def handle_logs(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not _allowed(update):
         return
-    n = int(context.args[0]) if context.args else 5
+    try:
+        n = int(context.args[0]) if context.args else 5
+    except ValueError:
+        await update.message.reply_text("Usage: /logs [number]")
+        return
     runs = logger.get_recent_runs(n)
     if not runs:
         await update.message.reply_text("No runs logged yet.")

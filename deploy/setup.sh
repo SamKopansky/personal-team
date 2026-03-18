@@ -108,12 +108,13 @@ echo "=== Installing systemd services ==="
 sudo cp deploy/bot.service /etc/systemd/system/personal-team-bot.service
 sudo cp deploy/scheduler.service /etc/systemd/system/personal-team-scheduler.service
 sudo systemctl daemon-reload
-sudo systemctl enable personal-team-bot personal-team-scheduler
-sudo systemctl start personal-team-bot personal-team-scheduler
 
 # ── Initialise database ───────────────────────────────────────────────────────
 echo "Initialising database..."
 .venv/bin/python -c "from agents.db import init_db; init_db(); print('Database ready.')"
+
+sudo systemctl enable personal-team-bot personal-team-scheduler
+sudo systemctl start personal-team-bot personal-team-scheduler
 
 # ── Smoke test ────────────────────────────────────────────────────────────────
 echo ""
