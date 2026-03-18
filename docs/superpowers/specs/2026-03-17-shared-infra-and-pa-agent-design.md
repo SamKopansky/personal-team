@@ -76,11 +76,35 @@ Manages per-agent conversation history backed by SQLite (`messages` table). No i
 | `summary` | TEXT | Rolling prose summary of user preferences and history |
 | `updated_at` | INTEGER | Unix timestamp of last update |
 
-**Session boundary:** `get_context()` enforces a 30-minute inactivity reset at the application layer — if the most recent message timestamp for `(chat_id, agent)` is older than 30 minutes, it returns `[]` (empty context), starting a fresh session. The messages remain in SQLite for the memory summary job but are not included in the active context window.
+**`settings` table schema** (key-value store for child profile and preferences):
+| Column | Type | Description |
+|---|---|---|
+| `key` | TEXT PK | Setting name (e.g. `child_age_months`, `dietary_notes`) |
+| `value` | TEXT | Setting value |
+| `updated_at` | INTEGER | Unix timestamp of last update |
+
+**`favorites` table schema:**
+| Column | Type | Description |
+|---|---|---|
+| `id` | INTEGER PK | Auto-increment |
+| `recipe_name` | TEXT | Name of the recipe |
+| `notes` | TEXT | Optional context from the conversation |
+| `added_at` | INTEGER | Unix timestamp |
+
+**`disliked` table schema:**
+| Column | Type | Description |
+|---|---|---|
+| `id` | INTEGER PK | Auto-increment |
+| `recipe_name` | TEXT | Name of the recipe |
+| `notes` | TEXT | Optional context from the conversation |
+| `added_at` | INTEGER | Unix timestamp |
+
+**Session boundary:** `get_context()` enforces a 24-hour inactivity reset at the application layer — if the most recent message timestamp for `(chat_id, agent)` is older than 24 hours, it returns `[]` (empty context), starting a fresh session. The messages remain in SQLite for the memory summary job but are not included in the active context window. Sam can also reset context manually via the `/clear` command.
 
 Public API:
 - `add_message(chat_id, agent, role, content)` — persists message
-- `get_context(chat_id, agent, limit=10)` — returns last N messages as `[{role, content}]`, or `[]` if session has been idle >30 minutes
+- `get_context(chat_id, agent, limit=10)` — returns last N messages as `[{role, content}]`, or `[]` if session has been idle >24 hours
+- `clear_context(chat_id, agent)` — deletes active session messages for this `(chat_id, agent)` pair
 - `get_memory_summary(agent)` — returns the agent's prose memory summary
 - `update_memory_summary(agent, summary)` — overwrites the summary row
 
@@ -93,23 +117,20 @@ Writes and queries structured run logs in SQLite (`runs` table). Schema matches 
 Public API:
 - `write_run(entry: dict)` — inserts a log row
 - `get_recent_runs(n: int)` — returns last N runs as list of dicts
-- `export_to_drive()` — serialises last 30 days to JSON, uploads to Drive backup folder
+- `export_to_drive()` — uploads the full SQLite database file to Drive backup folder (named `logs-backup-YYYY-MM-DD.db`)
 
 ### 3.4 `agents/drive_client.py`
 
-Authenticates via service account JSON at path `GOOGLE_CREDENTIALS_PATH` env var. Uses `google-api-python-client` with the **Drive API v3** (not the Docs API). All documents are stored as plain-text/Markdown files (`text/plain` MIME type) uploaded via Drive media upload — not as native Google Docs. This keeps the API surface simple and avoids the Docs `batchUpdate` complexity.
+Authenticates via service account JSON at path `GOOGLE_CREDENTIALS_PATH` env var. Uses `google-api-python-client` with the **Drive API v3** (not the Docs API). Files are stored as plain-text/Markdown (`text/plain` MIME type) uploaded via Drive media upload.
+
+In Phase 1, Drive is used for two purposes only: saving meal plan docs and uploading the daily SQLite backup. All other persistent data (child profile, favorites, disliked recipes) lives in SQLite.
 
 Public API:
-- `read_doc(file_id: str) -> str` — downloads file content as plain text
-- `write_doc(file_id: str, content: str)` — replaces file content via media upload
-- `append_to_doc(file_id: str, content: str)` — downloads current content, appends, re-uploads
-- `create_doc(folder_id: str, name: str, content: str) -> str` — creates new plain-text file in folder, returns file ID
+- `create_file(folder_id: str, name: str, content: str) -> str` — creates new plain-text file in folder, returns file ID
+- `upload_backup(folder_id: str, name: str, file_path: str)` — uploads the SQLite database file as a binary backup
 
-Drive file IDs for known docs are stored as env vars (never hardcoded):
+Drive file IDs stored as env vars:
 - `DRIVE_MEAL_PLANS_FOLDER_ID`
-- `DRIVE_CHILD_PROFILE_FILE_ID`
-- `DRIVE_FAVORITES_LOG_FILE_ID`
-- `DRIVE_DISLIKED_LOG_FILE_ID`
 - `DRIVE_BACKUP_FOLDER_ID`
 
 ---
@@ -133,6 +154,7 @@ pa.register_handlers(app)
 | `/meal` | `handle_meal` | Sends "working on it…", calls `pa.meal_plan_job()`, edits message with result |
 | `/research [topic]` | `handle_research` | Calls `pa.run(message, chat_id)` with the topic prefixed as `[RESEARCH REQUEST] {topic}` so the PA knows to use a research-style response |
 | `/logs [n]` | `handle_logs` | Calls `logger.get_recent_runs(n)`, formats as plain-English summary |
+| `/clear` | `handle_clear` | Calls `context_manager.clear_context(chat_id, "pa")`, confirms reset to user |
 
 **Free-form messages:** In Phase 1 (PA only), all non-command messages route directly to `pa.run()`. The Haiku message router is added in Phase 2 when multiple agents are live.
 
@@ -150,10 +172,10 @@ Registers `/meal`, `/research`, and the free-form message handler with the Teleg
 
 Called by the scheduler every Friday at 8am and on `/meal`. Sends the result to `TELEGRAM_CHAT_ID` (env var — Sam's personal chat ID with the bot, stored alongside other env vars). Sequence:
 
-1. Read child profile from Drive (`DRIVE_CHILD_PROFILE_FILE_ID`) — age, vegan constraint, current preferences
-2. Read favorites log from Drive (`DRIVE_FAVORITES_LOG_FILE_ID`)
-3. Read disliked recipes log from Drive (`DRIVE_DISLIKED_LOG_FILE_ID`)
-4. Read last 4 weeks of meal plan docs from Drive meal plans folder (for variety)
+1. Read child profile from SQLite `settings` table — age, vegan constraint, current preferences
+2. Read favorites from SQLite `favorites` table
+3. Read disliked recipes from SQLite `disliked` table
+4. Read last 4 weeks of meal plan records from SQLite `runs` table (output field) for variety
 5. Call Claude Haiku with system prompt + all context above
 6. Claude returns structured output: **3 recipes** + deduplicated ingredient list grouped by category
 7. Save full doc to Drive meal plans folder (named `meal-plan-YYYY-MM-DD.md`)
@@ -171,17 +193,19 @@ Handles all free-form PA messages and `/research` requests. Sequence:
 3. Append incoming user message to context
 4. Call Claude Haiku with system prompt + memory summary + context
 5. Persist user message and assistant response to `messages` table via `context_manager`
-6. Scan **the user's incoming message** for positive signals ("loved that", "was a hit", "favorite", "he liked") — if detected, Claude is asked in a follow-up single-turn call to extract the recipe name and append it to the Drive favorites log
-7. Scan **the user's incoming message** for negative signals ("didn't like", "won't eat", "avoid", "hated") — if detected, same extraction call appends to Drive disliked log
+6. Scan **the user's incoming message** for positive signals ("loved that", "was a hit", "favorite", "he liked") — if detected, Claude is asked in a follow-up single-turn call to extract the recipe name and insert it into the SQLite `favorites` table
+7. Scan **the user's incoming message** for negative signals ("didn't like", "won't eat", "avoid", "hated") — if detected, same extraction call inserts into the SQLite `disliked` table
 8. Return response string to `bot.py`
 
 ### 5.4 `update_memory_summary()`
 
 Called by the scheduler every Sunday at midnight. Sequence:
 
-1. Fetch last 30 days of messages for the PA from `messages` table
-2. Call Claude Haiku: "Summarise what you know about this user's preferences, their child's profile, dietary needs, and any notable patterns from these conversations."
-3. Write the resulting summary to `agent_memory` table via `context_manager.update_memory_summary("pa", summary)`
+1. Fetch the existing memory summary from `agent_memory` table
+2. Fetch messages from the `messages` table since `agent_memory.updated_at`
+3. If no new messages since last update, skip — nothing to add
+4. Call Claude Haiku with the existing summary and the new messages: "Here is your existing memory summary and new conversation history from the past week. Update the summary by adding any new context, preferences, or facts you've learned. Do not remove or overwrite anything already accurate."
+5. Write the updated summary back via `context_manager.update_memory_summary("pa", summary)`
 
 ### 5.5 System Prompt (`agents/pa/system-prompt.md`)
 
@@ -264,11 +288,11 @@ cd /home/pi/personal-team && git pull && sudo systemctl restart bot scheduler
 | Agent run logs | SQLite | `data/logs.db` → `runs` table |
 | Conversation history | SQLite | `data/logs.db` → `messages` table |
 | Agent memory summaries | SQLite | `data/logs.db` → `agent_memory` table |
-| Meal plan docs | Google Drive | `meal-plans/` folder |
-| Child profile | Google Drive | Single doc, updated by PA on request |
-| Favorites log | Google Drive | Append-only doc |
-| Disliked recipes log | Google Drive | Append-only doc |
-| Log backup | Google Drive | Daily JSON export from SQLite |
+| Child profile & preferences | SQLite | `data/logs.db` → `settings` table |
+| Favorites log | SQLite | `data/logs.db` → `favorites` table |
+| Disliked recipes log | SQLite | `data/logs.db` → `disliked` table |
+| Meal plan docs | Google Drive | `meal-plans/` folder (plain-text Markdown) |
+| Full database backup | Google Drive | Daily `.db` file upload |
 
 ---
 
@@ -283,9 +307,6 @@ ALLOWED_TELEGRAM_USER_ID=
 TELEGRAM_CHAT_ID=
 GOOGLE_CREDENTIALS_PATH=/home/pi/.config/personal-team/drive-credentials.json
 DRIVE_MEAL_PLANS_FOLDER_ID=
-DRIVE_CHILD_PROFILE_FILE_ID=
-DRIVE_FAVORITES_LOG_FILE_ID=
-DRIVE_DISLIKED_LOG_FILE_ID=
 DRIVE_BACKUP_FOLDER_ID=
 ```
 
@@ -293,7 +314,23 @@ DRIVE_BACKUP_FOLDER_ID=
 
 ---
 
-## 10. Out of Scope (Phase 1)
+## 10. Testing
+
+Phase 1 includes unit tests for pure logic only. No mocking of external APIs, no CI pipeline — those come in Phase 2.
+
+**Test coverage:**
+
+| Module | What to test |
+|---|---|
+| `context_manager.py` | 24-hour session boundary enforcement, `clear_context` wipes only the right `(chat_id, agent)` pair, `get_context` respects the limit param |
+| `logger.py` | `write_run` inserts correctly, `get_recent_runs(n)` returns N most recent in descending order |
+| `agents/pa/agent.py` | Signal detection correctly identifies positive/negative phrases in user messages, ignores neutral messages |
+
+Tests live in `tests/` at the project root and run with `pytest`. No test should require a live database, Telegram connection, or API key — use an in-memory SQLite database (`":memory:"`) for all DB tests.
+
+---
+
+## 11. Out of Scope (Phase 1)
 
 - Message router (Haiku classifier) — added in Phase 2 when multiple agents are live
 - Manager, Researcher, Developer agents
