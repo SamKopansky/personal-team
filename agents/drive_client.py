@@ -5,13 +5,18 @@ from googleapiclient.http import MediaFileUpload, MediaInMemoryUpload
 
 SCOPES = ["https://www.googleapis.com/auth/drive.file"]
 
+_service = None
+
 
 def _get_service():
-    creds = service_account.Credentials.from_service_account_file(
-        os.environ["GOOGLE_CREDENTIALS_PATH"],
-        scopes=SCOPES,
-    )
-    return build("drive", "v3", credentials=creds)
+    global _service
+    if _service is None:
+        creds = service_account.Credentials.from_service_account_file(
+            os.environ["GOOGLE_CREDENTIALS_PATH"],
+            scopes=SCOPES,
+        )
+        _service = build("drive", "v3", credentials=creds)
+    return _service
 
 
 def create_file(folder_id: str, name: str, content: str) -> str:

@@ -34,6 +34,8 @@ def complete(
                 system=system_prompt,
                 messages=messages,
             )
+            if not response.content:
+                raise ClaudeAPIError("Claude API returned empty content")
             return response.content[0].text
         except (anthropic.RateLimitError, anthropic.InternalServerError) as e:
             last_error = e
