@@ -53,7 +53,7 @@ Thin wrapper around the Anthropic Python SDK. Single public function:
 complete(system_prompt: str, messages: list[dict], model: str, max_tokens: int) -> str
 ```
 
-Handles token counting and raises a typed `ClaudeAPIError` on failure. Model is passed by the caller — agents specify Haiku or Sonnet explicitly.
+Retries up to 3 times with exponential backoff on transient errors (rate limits, 529 overload). Raises `ClaudeAPIError` after exhausting retries. Model is passed by the caller — agents specify Haiku or Sonnet explicitly.
 
 ### 3.2 `agents/context_manager.py`
 
@@ -76,9 +76,11 @@ Manages per-agent conversation history backed by SQLite (`messages` table). No i
 | `summary` | TEXT | Rolling prose summary of user preferences and history |
 | `updated_at` | INTEGER | Unix timestamp of last update |
 
+**Session boundary:** `get_context()` enforces a 30-minute inactivity reset at the application layer — if the most recent message timestamp for `(chat_id, agent)` is older than 30 minutes, it returns `[]` (empty context), starting a fresh session. The messages remain in SQLite for the memory summary job but are not included in the active context window.
+
 Public API:
 - `add_message(chat_id, agent, role, content)` — persists message
-- `get_context(chat_id, agent, limit=10)` — returns last N messages as `[{role, content}]`
+- `get_context(chat_id, agent, limit=10)` — returns last N messages as `[{role, content}]`, or `[]` if session has been idle >30 minutes
 - `get_memory_summary(agent)` — returns the agent's prose memory summary
 - `update_memory_summary(agent, summary)` — overwrites the summary row
 
@@ -95,13 +97,13 @@ Public API:
 
 ### 3.4 `agents/drive_client.py`
 
-Authenticates via service account JSON at path `GOOGLE_CREDENTIALS_PATH` env var. Uses `google-api-python-client`.
+Authenticates via service account JSON at path `GOOGLE_CREDENTIALS_PATH` env var. Uses `google-api-python-client` with the **Drive API v3** (not the Docs API). All documents are stored as plain-text/Markdown files (`text/plain` MIME type) uploaded via Drive media upload — not as native Google Docs. This keeps the API surface simple and avoids the Docs `batchUpdate` complexity.
 
 Public API:
-- `read_doc(file_id: str) -> str`
-- `write_doc(file_id: str, content: str)`
-- `append_to_doc(file_id: str, content: str)`
-- `create_doc(folder_id: str, name: str, content: str) -> str` — returns new file ID
+- `read_doc(file_id: str) -> str` — downloads file content as plain text
+- `write_doc(file_id: str, content: str)` — replaces file content via media upload
+- `append_to_doc(file_id: str, content: str)` — downloads current content, appends, re-uploads
+- `create_doc(folder_id: str, name: str, content: str) -> str` — creates new plain-text file in folder, returns file ID
 
 Drive file IDs for known docs are stored as env vars (never hardcoded):
 - `DRIVE_MEAL_PLANS_FOLDER_ID`
@@ -129,7 +131,7 @@ pa.register_handlers(app)
 | Command | Handler | Action |
 |---|---|---|
 | `/meal` | `handle_meal` | Sends "working on it…", calls `pa.meal_plan_job()`, edits message with result |
-| `/research [topic]` | `handle_research` | Calls `pa.run(topic, context)` with research intent |
+| `/research [topic]` | `handle_research` | Calls `pa.run(message, chat_id)` with the topic prefixed as `[RESEARCH REQUEST] {topic}` so the PA knows to use a research-style response |
 | `/logs [n]` | `handle_logs` | Calls `logger.get_recent_runs(n)`, formats as plain-English summary |
 
 **Free-form messages:** In Phase 1 (PA only), all non-command messages route directly to `pa.run()`. The Haiku message router is added in Phase 2 when multiple agents are live.
@@ -146,7 +148,7 @@ Registers `/meal`, `/research`, and the free-form message handler with the Teleg
 
 ### 5.2 `meal_plan_job()`
 
-Called by the scheduler every Friday at 8am and on `/meal`. Sequence:
+Called by the scheduler every Friday at 8am and on `/meal`. Sends the result to `TELEGRAM_CHAT_ID` (env var — Sam's personal chat ID with the bot, stored alongside other env vars). Sequence:
 
 1. Read child profile from Drive (`DRIVE_CHILD_PROFILE_FILE_ID`) — age, vegan constraint, current preferences
 2. Read favorites log from Drive (`DRIVE_FAVORITES_LOG_FILE_ID`)
@@ -169,8 +171,8 @@ Handles all free-form PA messages and `/research` requests. Sequence:
 3. Append incoming user message to context
 4. Call Claude Haiku with system prompt + memory summary + context
 5. Persist user message and assistant response to `messages` table via `context_manager`
-6. Scan response for positive signals ("loved that", "was a hit", "favorite") — if detected, append recipe to Drive favorites log
-7. Scan response for negative signals ("didn't like", "won't eat", "avoid") — if detected, append recipe to Drive disliked log
+6. Scan **the user's incoming message** for positive signals ("loved that", "was a hit", "favorite", "he liked") — if detected, Claude is asked in a follow-up single-turn call to extract the recipe name and append it to the Drive favorites log
+7. Scan **the user's incoming message** for negative signals ("didn't like", "won't eat", "avoid", "hated") — if detected, same extraction call appends to Drive disliked log
 8. Return response string to `bot.py`
 
 ### 5.4 `update_memory_summary()`
@@ -198,7 +200,7 @@ The system prompt is editable by Sam at any time by updating the file or chattin
 
 ## 6. Scheduler (`scheduler.py`)
 
-APScheduler process with four jobs:
+APScheduler process with three jobs:
 
 | Job | Schedule | Function |
 |---|---|---|
@@ -222,7 +224,7 @@ Runs once on a fresh Pi. Steps:
 4. Create virtualenv with `uv venv`, install dependencies with `uv pip install -r requirements.txt`
 5. Prompt for all env vars → write to `/home/pi/.env` (outside repo, `chmod 600`)
 6. Prompt to paste Drive service account JSON → write to `/home/pi/.config/personal-team/drive-credentials.json` (`chmod 600`)
-7. SSH hardening:
+7. SSH hardening — **performed only after confirming an SSH public key is present in `~/.ssh/authorized_keys`**. Script checks for the file and prompts to add a key if missing, before touching `sshd_config`:
    - Disable password authentication (`PasswordAuthentication no` in `sshd_config`)
    - Add `AllowUsers pi`
    - Restart `sshd`
@@ -278,6 +280,7 @@ Documented in `.env.example`:
 ANTHROPIC_API_KEY=
 TELEGRAM_BOT_TOKEN=
 ALLOWED_TELEGRAM_USER_ID=
+TELEGRAM_CHAT_ID=
 GOOGLE_CREDENTIALS_PATH=/home/pi/.config/personal-team/drive-credentials.json
 DRIVE_MEAL_PLANS_FOLDER_ID=
 DRIVE_CHILD_PROFILE_FILE_ID=
@@ -285,6 +288,8 @@ DRIVE_FAVORITES_LOG_FILE_ID=
 DRIVE_DISLIKED_LOG_FILE_ID=
 DRIVE_BACKUP_FOLDER_ID=
 ```
+
+**Loading:** `bot.py` and `scheduler.py` call `load_dotenv("/home/pi/.env")` at startup via `python-dotenv`. The systemd unit files also set `EnvironmentFile=/home/pi/.env` as a fallback for any env vars accessed before `load_dotenv()` runs.
 
 ---
 
