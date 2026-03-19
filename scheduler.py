@@ -25,7 +25,7 @@ def _alert(job_name: str, error: Exception):
     asyncio.run(
         bot.send_message(
             chat_id=os.environ["TELEGRAM_CHAT_ID"],
-            text=f"⚠️ Scheduled job failed: {job_name}\n{error}",
+            text=f"⚠️ Scheduled job failed: {job_name}. Check server logs.",
         )
     )
 
