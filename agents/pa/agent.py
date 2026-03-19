@@ -23,6 +23,7 @@ NEGATIVE_SIGNALS = [
 ]
 
 TELEGRAM_MAX_LENGTH = 4096
+MEMORY_SUMMARY_MAX_CHARS = 2000
 
 
 def _truncate_for_telegram(text: str, prefix: str = "") -> str:
@@ -281,29 +282,38 @@ def update_memory_summary():
 
     existing = context_manager.get_memory_summary("pa")
 
+    # Cap existing summary to prevent unbounded growth
+    if len(existing) > MEMORY_SUMMARY_MAX_CHARS:
+        existing = existing[:MEMORY_SUMMARY_MAX_CHARS]
+
     parts = []
     if existing:
         parts.append(f"## Existing memory summary\n{existing}")
+
+    # Only include recent messages to bound input size
+    recent = new_messages[-50:]
     parts.append(
         "## New conversation history\n"
-        + "\n".join(f"{m['role'].upper()}: {m['content']}" for m in new_messages)
+        + "\n".join(f"{m['role'].upper()}: {m['content']}" for m in recent)
     )
     parts.append(
         "Update the summary by adding any new context, preferences, or facts learned. "
-        "Do not remove or overwrite anything already accurate. Return only the updated summary."
+        "Do not remove or overwrite anything already accurate. Return only the updated summary. "
+        "Keep the summary under 2000 characters."
     )
 
     updated, _usage = claude_client.complete(
         system_prompt=(
             "You maintain a memory summary for a personal assistant. "
-            "Only add new information — never remove accurate existing information."
+            "Only add new information — never remove accurate existing information. "
+            "Keep the summary concise — under 2000 characters."
         ),
         messages=[{"role": "user", "content": "\n\n".join(parts)}],
         model=MODEL,
         max_tokens=500,
     )
 
-    context_manager.update_memory_summary("pa", updated)
+    context_manager.update_memory_summary("pa", updated[:MEMORY_SUMMARY_MAX_CHARS])
 
 
 # ── Telegram handlers ────────────────────────────────────────────────────────
