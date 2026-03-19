@@ -28,9 +28,8 @@ fi
 cd "$REPO_DIR"
 
 # ── 4. Python environment ─────────────────────────────────────────────────────
-echo "[4/9] Creating virtualenv and installing dependencies..."
-uv venv .venv
-uv pip install -r requirements.txt
+echo "[4/9] Installing dependencies..."
+uv sync
 
 # ── 5. Environment variables ──────────────────────────────────────────────────
 echo "[5/9] Configuring environment variables..."
@@ -111,7 +110,7 @@ sudo systemctl daemon-reload
 
 # ── Initialise database ───────────────────────────────────────────────────────
 echo "Initialising database..."
-.venv/bin/python -c "from agents.db import init_db; init_db(); print('Database ready.')"
+uv run python -c "from agents.db import init_db; init_db(); print('Database ready.')"
 
 sudo systemctl enable personal-team-bot personal-team-scheduler
 sudo systemctl start personal-team-bot personal-team-scheduler
@@ -121,7 +120,7 @@ echo ""
 echo "=== Smoke test ==="
 echo "Sending test Telegram message..."
 source "$ENV_FILE"
-.venv/bin/python - <<'PYEOF'
+uv run python - <<'PYEOF'
 import os, asyncio, telegram
 from dotenv import load_dotenv
 load_dotenv("/home/pi/.env")
