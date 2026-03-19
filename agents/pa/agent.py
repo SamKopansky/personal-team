@@ -131,10 +131,12 @@ def _save_recipe_signal(message: str, signal_type: str):
         conn.close()
 
 
-def meal_plan_job():
-    import asyncio
-    import telegram as tg
+def generate_meal_plan(trigger: str = "scheduled") -> str:
+    """Generate a meal plan, save to Drive, log the run. Returns the plan text.
 
+    Args:
+        trigger: "scheduled" for cron jobs, "telegram" for interactive requests.
+    """
     run_id = str(uuid.uuid4())
     start = time.time()
     try:
@@ -176,35 +178,28 @@ def meal_plan_job():
             content=response,
         )
 
-        bot = tg.Bot(token=os.environ["TELEGRAM_BOT_TOKEN"])
-        meal_text = _truncate_for_telegram(response, "🟦 PA · Meal plan ready!\n\n")
-        asyncio.run(
-            bot.send_message(
-                chat_id=os.environ["TELEGRAM_CHAT_ID"],
-                text=meal_text,
-            )
-        )
-
         logger.write_run(
             {
                 "run_id": run_id,
                 "agent": "pa",
-                "trigger": "scheduled",
+                "trigger": trigger,
                 "task": "meal_plan",
                 "status": "success",
-                "duration_seconds": int(time.time() - start),
                 "tokens_input": usage.get("input_tokens"),
                 "tokens_output": usage.get("output_tokens"),
+                "duration_seconds": int(time.time() - start),
                 "output": response[:500],
             }
         )
+
+        return response
 
     except Exception as e:
         logger.write_run(
             {
                 "run_id": run_id,
                 "agent": "pa",
-                "trigger": "scheduled",
+                "trigger": trigger,
                 "task": "meal_plan",
                 "status": "failed",
                 "duration_seconds": int(time.time() - start),
@@ -212,6 +207,23 @@ def meal_plan_job():
             }
         )
         raise
+
+
+def meal_plan_job():
+    """Scheduled entry point: generate meal plan and send to Telegram."""
+    import asyncio
+    import telegram as tg
+
+    response = generate_meal_plan(trigger="scheduled")
+
+    bot = tg.Bot(token=os.environ["TELEGRAM_BOT_TOKEN"])
+    meal_text = _truncate_for_telegram(response, "🟦 PA · Meal plan ready!\n\n")
+    asyncio.run(
+        bot.send_message(
+            chat_id=os.environ["TELEGRAM_CHAT_ID"],
+            text=meal_text,
+        )
+    )
 
 
 def run(message: str, chat_id: str) -> str:
@@ -294,13 +306,18 @@ async def _handle_meal(update: "Any", context: "Any"):
     if not _allowed(update):
         return
     import asyncio
+    from functools import partial
     msg = await update.message.reply_text("🟦 PA · Working on your meal plan…")
     try:
         loop = asyncio.get_event_loop()
-        await loop.run_in_executor(None, meal_plan_job)
-        await msg.edit_text("🟦 PA · Meal plan sent! Check the next message.")
+        response = await loop.run_in_executor(
+            None, partial(generate_meal_plan, trigger="telegram")
+        )
+        meal_text = _truncate_for_telegram(response, "🟦 PA · Meal plan ready!\n\n")
+        await msg.edit_text(meal_text)
     except Exception as e:
-        await msg.edit_text(f"🟦 PA · Meal plan failed: {e}")
+        logging.getLogger(__name__).error("Meal plan failed: %s", e, exc_info=True)
+        await msg.edit_text("🟦 PA · Meal plan failed. Check /logs for details.")
 
 
 async def _handle_research(update: "Any", context: "Any"):
