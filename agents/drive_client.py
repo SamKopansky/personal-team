@@ -1,4 +1,5 @@
 import os
+import threading
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload, MediaInMemoryUpload
@@ -6,16 +7,19 @@ from googleapiclient.http import MediaFileUpload, MediaInMemoryUpload
 SCOPES = ["https://www.googleapis.com/auth/drive.file"]
 
 _service = None
+_service_lock = threading.Lock()
 
 
 def _get_service():
     global _service
     if _service is None:
-        creds = service_account.Credentials.from_service_account_file(
-            os.environ["GOOGLE_CREDENTIALS_PATH"],
-            scopes=SCOPES,
-        )
-        _service = build("drive", "v3", credentials=creds)
+        with _service_lock:
+            if _service is None:
+                creds = service_account.Credentials.from_service_account_file(
+                    os.environ["GOOGLE_CREDENTIALS_PATH"],
+                    scopes=SCOPES,
+                )
+                _service = build("drive", "v3", credentials=creds)
     return _service
 
 

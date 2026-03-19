@@ -1,4 +1,5 @@
 import os
+import threading
 import time
 import anthropic
 
@@ -8,12 +9,15 @@ class ClaudeAPIError(Exception):
 
 
 _client = None
+_client_lock = threading.Lock()
 
 
 def _get_client() -> anthropic.Anthropic:
     global _client
     if _client is None:
-        _client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
+        with _client_lock:
+            if _client is None:
+                _client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
     return _client
 
 
