@@ -7,6 +7,7 @@ DB_PATH = Path(__file__).parent.parent / "data" / "logs.db"
 def get_connection() -> sqlite3.Connection:
     conn = sqlite3.connect(str(DB_PATH))
     conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA journal_mode=WAL")
     return conn
 
 
@@ -63,5 +64,17 @@ def init_db():
             notes TEXT,
             added_at INTEGER NOT NULL
         );
+
+        CREATE INDEX IF NOT EXISTS idx_messages_chat_agent_ts
+            ON messages(chat_id, agent, timestamp DESC, id DESC);
+
+        CREATE INDEX IF NOT EXISTS idx_messages_agent_ts
+            ON messages(agent, timestamp);
+
+        CREATE INDEX IF NOT EXISTS idx_runs_triggered_at
+            ON runs(triggered_at DESC);
+
+        CREATE INDEX IF NOT EXISTS idx_runs_agent_task_ts
+            ON runs(agent, task, triggered_at DESC);
     """)
     conn.close()
