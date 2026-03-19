@@ -6,6 +6,7 @@ import threading
 import time
 import uuid
 from pathlib import Path
+from typing import Any
 
 from agents import claude_client, context_manager, drive_client, logger
 from agents.db import get_connection
@@ -319,12 +320,12 @@ def update_memory_summary():
 
 # ── Telegram handlers ────────────────────────────────────────────────────────
 
-def _allowed(update: "Any") -> bool:
+def _allowed(update: Any) -> bool:
     user = update.effective_user
     return user is not None and user.id == int(os.environ["ALLOWED_TELEGRAM_USER_ID"])
 
 
-async def _handle_meal(update: "Any", context: "Any"):
+async def _handle_meal(update: Any, context: Any):
     if not _allowed(update):
         return
     import asyncio
@@ -342,7 +343,7 @@ async def _handle_meal(update: "Any", context: "Any"):
         await msg.edit_text("🟦 PA · Meal plan failed. Check /logs for details.")
 
 
-async def _handle_research(update: "Any", context: "Any"):
+async def _handle_research(update: Any, context: Any):
     if not _allowed(update):
         return
     import asyncio
@@ -354,12 +355,16 @@ async def _handle_research(update: "Any", context: "Any"):
         )
         return
     chat_id = str(update.effective_chat.id)
-    loop = asyncio.get_event_loop()
-    response = await loop.run_in_executor(None, run, f"[RESEARCH REQUEST] {topic}", chat_id)
-    await update.message.reply_text(_truncate_for_telegram(response, "🟦 PA · "))
+    try:
+        loop = asyncio.get_event_loop()
+        response = await loop.run_in_executor(None, run, f"[RESEARCH REQUEST] {topic}", chat_id)
+        await update.message.reply_text(_truncate_for_telegram(response, "🟦 PA · "))
+    except Exception as e:
+        logging.getLogger(__name__).error("Research failed: %s", e, exc_info=True)
+        await update.message.reply_text("🟦 PA · Research failed. Check /logs for details.")
 
 
-async def _handle_clear(update: "Any", context: "Any"):
+async def _handle_clear(update: Any, context: Any):
     if not _allowed(update):
         return
     chat_id = str(update.effective_chat.id)
@@ -367,17 +372,21 @@ async def _handle_clear(update: "Any", context: "Any"):
     await update.message.reply_text("🟦 PA · Conversation context cleared.")
 
 
-async def _handle_message(update: "Any", context: "Any"):
+async def _handle_message(update: Any, context: Any):
     if not _allowed(update):
         return
     import asyncio
     chat_id = str(update.effective_chat.id)
-    loop = asyncio.get_event_loop()
-    response = await loop.run_in_executor(None, run, update.message.text, chat_id)
-    await update.message.reply_text(_truncate_for_telegram(response, "🟦 PA · "))
+    try:
+        loop = asyncio.get_event_loop()
+        response = await loop.run_in_executor(None, run, update.message.text, chat_id)
+        await update.message.reply_text(_truncate_for_telegram(response, "🟦 PA · "))
+    except Exception as e:
+        logging.getLogger(__name__).error("Message handling failed: %s", e, exc_info=True)
+        await update.message.reply_text("🟦 PA · Something went wrong. Check /logs for details.")
 
 
-def register_handlers(app: "Any"):
+def register_handlers(app: Any):
     from telegram.ext import (
         CommandHandler,
         MessageHandler,
