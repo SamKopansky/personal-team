@@ -102,11 +102,14 @@ def _extract_recipe_name(message: str, signal_type: str) -> str | None:
     return None if name.upper() == "NONE" else name
 
 
+_SIGNAL_TABLE_MAP = {"positive": "favorites", "negative": "disliked"}
+
+
 def _save_recipe_signal(message: str, signal_type: str):
     recipe_name = _extract_recipe_name(message, signal_type)
     if not recipe_name:
         return
-    table = "favorites" if signal_type == "positive" else "disliked"
+    table = _SIGNAL_TABLE_MAP[signal_type]  # KeyError if invalid
     conn = get_connection()
     try:
         with conn:

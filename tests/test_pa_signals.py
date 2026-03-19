@@ -45,3 +45,15 @@ def test_favorite_keyword():
 def test_avoid_keyword():
     _, has_neg = detect_signals("Let's avoid that one in future")
     assert has_neg is True
+
+
+import pytest
+from agents.pa.agent import _save_recipe_signal
+
+
+def test_save_recipe_signal_rejects_invalid_signal_type(monkeypatch):
+    monkeypatch.setattr(
+        "agents.pa.agent._extract_recipe_name", lambda msg, st: "Test Recipe"
+    )
+    with pytest.raises(KeyError):
+        _save_recipe_signal("loved the soup", "invalid_type")
