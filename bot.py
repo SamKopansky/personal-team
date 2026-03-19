@@ -41,7 +41,10 @@ async def handle_logs(update: Update, context: ContextTypes.DEFAULT_TYPE):
         total_cost += cost
         lines.append(f"• {r['agent']} [{r['status']}] — {r['task']} (${cost:.4f})")
     lines.append(f"\nTotal shown: ${total_cost:.4f}")
-    await update.message.reply_text("\n".join(lines))
+    text = "\n".join(lines)
+    if len(text) > 4096:
+        text = text[:4093] + "..."
+    await update.message.reply_text(text)
 
 
 def main():

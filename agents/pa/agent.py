@@ -21,6 +21,15 @@ NEGATIVE_SIGNALS = [
     "hated", "didn't eat", "refused",
 ]
 
+TELEGRAM_MAX_LENGTH = 4096
+
+
+def _truncate_for_telegram(text: str, prefix: str = "") -> str:
+    max_len = TELEGRAM_MAX_LENGTH - len(prefix)
+    if len(text) <= max_len:
+        return prefix + text
+    return prefix + text[: max_len - 3] + "..."
+
 
 def detect_signals(message: str) -> tuple[bool, bool]:
     """Returns (has_positive, has_negative). Pure function — no side effects."""
@@ -168,10 +177,11 @@ def meal_plan_job():
         )
 
         bot = tg.Bot(token=os.environ["TELEGRAM_BOT_TOKEN"])
+        meal_text = _truncate_for_telegram(response, "🟦 PA · Meal plan ready!\n\n")
         asyncio.run(
             bot.send_message(
                 chat_id=os.environ["TELEGRAM_CHAT_ID"],
-                text=f"🟦 PA · Meal plan ready!\n\n{response}",
+                text=meal_text,
             )
         )
 
@@ -305,7 +315,7 @@ async def _handle_research(update: "Any", context: "Any"):
     chat_id = str(update.effective_chat.id)
     loop = asyncio.get_event_loop()
     response = await loop.run_in_executor(None, run, f"[RESEARCH REQUEST] {topic}", chat_id)
-    await update.message.reply_text(f"🟦 PA · {response}")
+    await update.message.reply_text(_truncate_for_telegram(response, "🟦 PA · "))
 
 
 async def _handle_clear(update: "Any", context: "Any"):
@@ -323,7 +333,7 @@ async def _handle_message(update: "Any", context: "Any"):
     chat_id = str(update.effective_chat.id)
     loop = asyncio.get_event_loop()
     response = await loop.run_in_executor(None, run, update.message.text, chat_id)
-    await update.message.reply_text(f"🟦 PA · {response}")
+    await update.message.reply_text(_truncate_for_telegram(response, "🟦 PA · "))
 
 
 def register_handlers(app: "Any"):
