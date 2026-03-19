@@ -1,13 +1,13 @@
+import datetime
 import json
 import logging
 import os
 import threading
 import time
 import uuid
-import datetime
 from pathlib import Path
 
-from agents import claude_client, context_manager, logger, drive_client
+from agents import claude_client, context_manager, drive_client, logger
 from agents.db import get_connection
 
 MODEL = "claude-haiku-4-5"
@@ -160,7 +160,7 @@ def generate_meal_plan(trigger: str = "scheduled") -> str:
             )
         if recent_plans:
             context_parts.append(
-                f"Recent meal plans (avoid repeating these recipes): "
+                "Recent meal plans (avoid repeating these recipes): "
                 + " | ".join(recent_plans[:4])
             )
 
@@ -214,6 +214,7 @@ def generate_meal_plan(trigger: str = "scheduled") -> str:
 def meal_plan_job():
     """Scheduled entry point: generate meal plan and send to Telegram."""
     import asyncio
+
     import telegram as tg
 
     response = generate_meal_plan(trigger="scheduled")

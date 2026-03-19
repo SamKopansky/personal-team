@@ -1,4 +1,5 @@
 import time
+
 from agents.db import get_connection
 
 SESSION_TIMEOUT = 24 * 60 * 60  # seconds

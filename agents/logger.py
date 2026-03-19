@@ -1,8 +1,9 @@
-import uuid
-import time
 import json
 import os
-from agents.db import get_connection, DB_PATH
+import time
+import uuid
+
+from agents.db import DB_PATH, get_connection
 
 
 def write_run(entry: dict):
@@ -50,6 +51,7 @@ def get_recent_runs(n: int) -> list[dict]:
 
 def export_to_drive():
     import datetime
+
     from agents.drive_client import upload_backup
 
     backup_folder_id = os.environ["DRIVE_BACKUP_FOLDER_ID"]

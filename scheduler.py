@@ -1,16 +1,17 @@
-import os
 import asyncio
 import logging
+import os
+
 from dotenv import load_dotenv
 
 load_dotenv()
 
-from apscheduler.schedulers.blocking import BlockingScheduler
 import telegram
+from apscheduler.schedulers.blocking import BlockingScheduler
 
-from agents.db import init_db
-from agents import logger
 import agents.pa.agent as pa
+from agents import logger
+from agents.db import init_db
 
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",

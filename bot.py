@@ -1,5 +1,6 @@
-import os
 import logging
+import os
+
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -7,9 +8,9 @@ load_dotenv()
 from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes
 
-from agents.db import init_db
-from agents import logger
 import agents.pa.agent as pa
+from agents import logger
+from agents.db import init_db
 
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",

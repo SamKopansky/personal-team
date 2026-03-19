@@ -1,4 +1,6 @@
-from agents.pa.agent import detect_signals
+import pytest
+
+from agents.pa.agent import _save_recipe_signal, detect_signals
 
 
 def test_positive_signal_detected():
@@ -46,9 +48,6 @@ def test_avoid_keyword():
     _, has_neg = detect_signals("Let's avoid that one in future")
     assert has_neg is True
 
-
-import pytest
-from agents.pa.agent import _save_recipe_signal
 
 
 def test_save_recipe_signal_rejects_invalid_signal_type(monkeypatch):
