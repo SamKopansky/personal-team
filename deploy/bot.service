@@ -1,0 +1,16 @@
+[Unit]
+Description=Personal Team Bot
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/home/pi/personal-team
+EnvironmentFile=/home/pi/.env
+ExecStart=/home/pi/personal-team/.venv/bin/python bot.py
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

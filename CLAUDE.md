@@ -74,23 +74,27 @@ research/[ticket-id]-[slug].md          # Researcher output briefs
 
 ## Commands
 
-_Not yet implemented — populate once the project is scaffolded._
-
 ```bash
+# Install dependencies
+uv sync
+
+# Install with dev dependencies
+uv sync --extra dev
+
 # Run the scheduler
-python scheduler.py
+uv run python scheduler.py
 
 # Run the Telegram bot
-python bot.py
+uv run python bot.py
 
 # Run Python tests
-pytest
+uv run pytest
 
 # Lint Python
-ruff check .
+uv run ruff check .
 
 # Format Python
-ruff format .
+uv run ruff format .
 ```
 
 ## Implementation Phases

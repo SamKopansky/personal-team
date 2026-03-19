@@ -32,3 +32,9 @@ Thumbs.db
 .vscode/
 *.swp
 *.swo
+
+# Git worktrees
+.worktrees/
+
+# Data
+data/
