@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+import threading
 import time
 import uuid
 import datetime
@@ -234,29 +235,39 @@ def run(message: str, chat_id: str) -> str:
     if memory:
         system_prompt = f"{system_prompt}\n\n## Memory\n{memory}"
 
+    context_manager.add_message(chat_id, "pa", "user", message)
+
     messages = ctx + [{"role": "user", "content": message}]
 
-    response, _usage = claude_client.complete(
-        system_prompt=system_prompt,
-        messages=messages,
-        model=MODEL,
-        max_tokens=1000,
-    )
+    try:
+        response, _usage = claude_client.complete(
+            system_prompt=system_prompt,
+            messages=messages,
+            model=MODEL,
+            max_tokens=1000,
+        )
+    except Exception:
+        # Add synthetic assistant message to keep alternating pattern intact
+        context_manager.add_message(chat_id, "pa", "assistant", "[Error — no response generated]")
+        raise
 
-    context_manager.add_message(chat_id, "pa", "user", message)
     context_manager.add_message(chat_id, "pa", "assistant", response)
 
     has_positive, has_negative = detect_signals(message)
-    if has_positive:
-        try:
-            _save_recipe_signal(message, "positive")
-        except Exception:
-            pass  # signal detection is best-effort
-    if has_negative:
-        try:
-            _save_recipe_signal(message, "negative")
-        except Exception:
-            pass  # signal detection is best-effort
+    if has_positive or has_negative:
+        def _detect():
+            if has_positive:
+                try:
+                    _save_recipe_signal(message, "positive")
+                except Exception:
+                    pass
+            if has_negative:
+                try:
+                    _save_recipe_signal(message, "negative")
+                except Exception:
+                    pass
+
+        threading.Thread(target=_detect, daemon=True).start()
 
     return response
 
