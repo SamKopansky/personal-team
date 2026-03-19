@@ -22,7 +22,7 @@ def complete(
     messages: list[dict],
     model: str,
     max_tokens: int = 1024,
-) -> str:
+) -> tuple[str, dict]:
     client = _get_client()
     last_error = None
 
@@ -36,7 +36,11 @@ def complete(
             )
             if not response.content:
                 raise ClaudeAPIError("Claude API returned empty content")
-            return response.content[0].text
+            usage = {
+                "input_tokens": response.usage.input_tokens,
+                "output_tokens": response.usage.output_tokens,
+            }
+            return response.content[0].text, usage
         except (anthropic.RateLimitError, anthropic.InternalServerError) as e:
             last_error = e
             time.sleep(2**attempt)

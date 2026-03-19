@@ -102,7 +102,7 @@ def _extract_recipe_name(message: str, signal_type: str) -> str | None:
         f"feedback about a recipe. Extract only the recipe name. "
         f"If no specific recipe name is mentioned, respond with NONE."
     )
-    result = claude_client.complete(
+    result, _usage = claude_client.complete(
         system_prompt="Extract recipe names from text. Respond with only the recipe name or NONE.",
         messages=[{"role": "user", "content": prompt}],
         model=MODEL,
@@ -162,7 +162,7 @@ def meal_plan_job():
 
         user_message = "\n".join(context_parts) + "\n\nGenerate this week's meal plan."
 
-        response = claude_client.complete(
+        response, usage = claude_client.complete(
             system_prompt=system_prompt,
             messages=[{"role": "user", "content": user_message}],
             model=MODEL,
@@ -193,6 +193,8 @@ def meal_plan_job():
                 "task": "meal_plan",
                 "status": "success",
                 "duration_seconds": int(time.time() - start),
+                "tokens_input": usage.get("input_tokens"),
+                "tokens_output": usage.get("output_tokens"),
                 "output": response[:500],
             }
         )
@@ -222,7 +224,7 @@ def run(message: str, chat_id: str) -> str:
 
     messages = ctx + [{"role": "user", "content": message}]
 
-    response = claude_client.complete(
+    response, _usage = claude_client.complete(
         system_prompt=system_prompt,
         messages=messages,
         model=MODEL,
@@ -268,7 +270,7 @@ def update_memory_summary():
         "Do not remove or overwrite anything already accurate. Return only the updated summary."
     )
 
-    updated = claude_client.complete(
+    updated, _usage = claude_client.complete(
         system_prompt=(
             "You maintain a memory summary for a personal assistant. "
             "Only add new information — never remove accurate existing information."
