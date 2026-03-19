@@ -273,7 +273,8 @@ def update_memory_summary():
 # ── Telegram handlers ────────────────────────────────────────────────────────
 
 def _allowed(update: "Any") -> bool:
-    return update.effective_user.id == int(os.environ["ALLOWED_TELEGRAM_USER_ID"])
+    user = update.effective_user
+    return user is not None and user.id == int(os.environ["ALLOWED_TELEGRAM_USER_ID"])
 
 
 async def _handle_meal(update: "Any", context: "Any"):

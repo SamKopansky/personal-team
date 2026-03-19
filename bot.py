@@ -18,7 +18,8 @@ logging.basicConfig(
 
 
 def _allowed(update: Update) -> bool:
-    return update.effective_user.id == int(os.environ["ALLOWED_TELEGRAM_USER_ID"])
+    user = update.effective_user
+    return user is not None and user.id == int(os.environ["ALLOWED_TELEGRAM_USER_ID"])
 
 
 async def handle_logs(update: Update, context: ContextTypes.DEFAULT_TYPE):
