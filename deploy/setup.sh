@@ -105,8 +105,8 @@ echo "  Tailscale up. Authenticate in the browser if prompted."
 # ── systemd services ──────────────────────────────────────────────────────────
 echo ""
 echo "=== Installing systemd services ==="
-sudo cp deploy/bot.service /etc/systemd/system/personal-team-bot.service
-sudo cp deploy/scheduler.service /etc/systemd/system/personal-team-scheduler.service
+sed "s/User=pi/User=$(whoami)/" deploy/bot.service | sudo tee /etc/systemd/system/personal-team-bot.service > /dev/null
+sed "s/User=pi/User=$(whoami)/" deploy/scheduler.service | sudo tee /etc/systemd/system/personal-team-scheduler.service > /dev/null
 sudo systemctl daemon-reload
 
 # ── Initialise database ───────────────────────────────────────────────────────
