@@ -12,12 +12,13 @@ echo ""
 # ── 1. System packages ────────────────────────────────────────────────────────
 echo "[1/9] Installing system packages..."
 sudo apt update -qq
-sudo apt install -y python3.11 python3.11-venv git sqlite3 fail2ban curl
+sudo apt install -y git sqlite3 fail2ban curl
 
 # ── 2. uv ─────────────────────────────────────────────────────────────────────
 echo "[2/9] Installing uv..."
 curl -LsSf https://astral.sh/uv/install.sh | sh
-export PATH="$HOME/.cargo/bin:$PATH"
+export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"
+uv python install 3.11
 
 # ── 3. Clone repo ─────────────────────────────────────────────────────────────
 echo "[3/9] Cloning repository..."
