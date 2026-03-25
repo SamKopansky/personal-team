@@ -226,6 +226,7 @@ def meal_plan_job():
         bot.send_message(
             chat_id=os.environ["TELEGRAM_CHAT_ID"],
             text=meal_text,
+            parse_mode="Markdown",
         )
     )
 
@@ -337,7 +338,7 @@ async def _handle_meal(update: Any, context: Any):
             None, partial(generate_meal_plan, trigger="telegram")
         )
         meal_text = _truncate_for_telegram(response, "🟦 PA · Meal plan ready!\n\n")
-        await msg.edit_text(meal_text)
+        await msg.edit_text(meal_text, parse_mode="Markdown")
     except Exception as e:
         logging.getLogger(__name__).error("Meal plan failed: %s", e, exc_info=True)
         await msg.edit_text("🟦 PA · Meal plan failed. Check /logs for details.")
@@ -358,7 +359,7 @@ async def _handle_research(update: Any, context: Any):
     try:
         loop = asyncio.get_event_loop()
         response = await loop.run_in_executor(None, run, f"[RESEARCH REQUEST] {topic}", chat_id)
-        await update.message.reply_text(_truncate_for_telegram(response, "🟦 PA · "))
+        await update.message.reply_text(_truncate_for_telegram(response, "🟦 PA · "), parse_mode="Markdown")
     except Exception as e:
         logging.getLogger(__name__).error("Research failed: %s", e, exc_info=True)
         await update.message.reply_text("🟦 PA · Research failed. Check /logs for details.")
@@ -380,7 +381,7 @@ async def _handle_message(update: Any, context: Any):
     try:
         loop = asyncio.get_event_loop()
         response = await loop.run_in_executor(None, run, update.message.text, chat_id)
-        await update.message.reply_text(_truncate_for_telegram(response, "🟦 PA · "))
+        await update.message.reply_text(_truncate_for_telegram(response, "🟦 PA · "), parse_mode="Markdown")
     except Exception as e:
         logging.getLogger(__name__).error("Message handling failed: %s", e, exc_info=True)
         await update.message.reply_text("🟦 PA · Something went wrong. Check /logs for details.")
