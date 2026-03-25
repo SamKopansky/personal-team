@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-REPO_DIR="/home/pi/personal-team"
-ENV_FILE="/home/pi/.env"
-CREDS_DIR="/home/pi/.config/personal-team"
+REPO_DIR="$HOME/personal-team"
+ENV_FILE="$HOME/.env"
+CREDS_DIR="$HOME/.config/personal-team"
 CREDS_FILE="$CREDS_DIR/drive-credentials.json"
 
 echo "=== Personal Team Pi Setup ==="
@@ -67,7 +67,7 @@ echo "  Written to $CREDS_FILE"
 _harden_ssh() {
     sudo sed -i 's/^#\?PasswordAuthentication.*/PasswordAuthentication no/' /etc/ssh/sshd_config
     sudo sed -i 's/^#\?ChallengeResponseAuthentication.*/ChallengeResponseAuthentication no/' /etc/ssh/sshd_config
-    grep -q "^AllowUsers" /etc/ssh/sshd_config || echo "AllowUsers pi" | sudo tee -a /etc/ssh/sshd_config
+    grep -q "^AllowUsers" /etc/ssh/sshd_config || echo "AllowUsers $(whoami)" | sudo tee -a /etc/ssh/sshd_config
     sudo systemctl restart sshd
     echo "  SSH hardened: password auth disabled, AllowUsers pi set."
 }
@@ -123,8 +123,6 @@ echo "Sending test Telegram message..."
 source "$ENV_FILE"
 uv run python - <<'PYEOF'
 import os, asyncio, telegram
-from dotenv import load_dotenv
-load_dotenv("/home/pi/.env")
 async def send():
     bot = telegram.Bot(token=os.environ["TELEGRAM_BOT_TOKEN"])
     await bot.send_message(

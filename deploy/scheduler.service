@@ -6,9 +6,9 @@ Wants=network-online.target
 [Service]
 Type=simple
 User=pi
-WorkingDirectory=/home/pi/personal-team
-EnvironmentFile=/home/pi/.env
-ExecStart=/home/pi/personal-team/.venv/bin/python scheduler.py
+WorkingDirectory=%h/personal-team
+EnvironmentFile=%h/.env
+ExecStart=%h/personal-team/.venv/bin/python scheduler.py
 Restart=always
 RestartSec=10
 
