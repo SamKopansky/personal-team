@@ -359,7 +359,8 @@ async def _handle_research(update: Any, context: Any):
     try:
         loop = asyncio.get_event_loop()
         response = await loop.run_in_executor(None, run, f"[RESEARCH REQUEST] {topic}", chat_id)
-        await update.message.reply_text(_truncate_for_telegram(response, "🟦 PA · "), parse_mode="Markdown")
+        text = _truncate_for_telegram(response, "🟦 PA · ")
+        await update.message.reply_text(text, parse_mode="Markdown")
     except Exception as e:
         logging.getLogger(__name__).error("Research failed: %s", e, exc_info=True)
         await update.message.reply_text("🟦 PA · Research failed. Check /logs for details.")
@@ -381,20 +382,17 @@ async def _handle_message(update: Any, context: Any):
     try:
         loop = asyncio.get_event_loop()
         response = await loop.run_in_executor(None, run, update.message.text, chat_id)
-        await update.message.reply_text(_truncate_for_telegram(response, "🟦 PA · "), parse_mode="Markdown")
+        text = _truncate_for_telegram(response, "🟦 PA · ")
+        await update.message.reply_text(text, parse_mode="Markdown")
     except Exception as e:
         logging.getLogger(__name__).error("Message handling failed: %s", e, exc_info=True)
         await update.message.reply_text("🟦 PA · Something went wrong. Check /logs for details.")
 
 
 def register_handlers(app: Any):
-    from telegram.ext import (
-        CommandHandler,
-        MessageHandler,
-        filters,
-    )
+    from telegram.ext import CommandHandler
 
     app.add_handler(CommandHandler("meal", _handle_meal))
     app.add_handler(CommandHandler("research", _handle_research))
     app.add_handler(CommandHandler("clear", _handle_clear))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, _handle_message))
+    # Free-form text messages are routed via the router in bot.py, not registered here.

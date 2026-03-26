@@ -9,7 +9,8 @@ def add_message(chat_id: str, agent: str, role: str, content: str):
     conn = get_connection()
     with conn:
         conn.execute(
-            "INSERT INTO messages (chat_id, agent, role, content, timestamp) VALUES (?, ?, ?, ?, ?)",
+            "INSERT INTO messages (chat_id, agent, role, content, timestamp)"
+            " VALUES (?, ?, ?, ?, ?)",
             (chat_id, agent, role, content, int(time.time())),
         )
     conn.close()
@@ -81,7 +82,8 @@ def get_memory_updated_at(agent: str) -> int:
 def get_messages_since(agent: str, since_timestamp: int) -> list[dict]:
     conn = get_connection()
     rows = conn.execute(
-        "SELECT role, content FROM messages WHERE agent = ? AND timestamp > ? ORDER BY timestamp ASC",
+        "SELECT role, content FROM messages"
+        " WHERE agent = ? AND timestamp > ? ORDER BY timestamp ASC",
         (agent, since_timestamp),
     ).fetchall()
     conn.close()
